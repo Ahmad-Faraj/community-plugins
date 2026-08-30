@@ -108,6 +108,31 @@ func TestCheck_RestartAfterTimeoutUnhealthy(t *testing.T) {
 	assert.Equal(t, sdk.StageStatusFailure, status)
 }
 
+func TestCheck_TimeoutWhileProbeInFlight(t *testing.T) {
+	t.Parallel()
+
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		// Answer well after the budget has passed.
+		select {
+		case <-time.After(5 * time.Second):
+			w.WriteHeader(http.StatusOK)
+		case <-r.Context().Done():
+		}
+	}))
+	defer server.Close()
+
+	start := time.Now()
+	status := check(context.Background(), server.Client(), testOptions(server.URL), start, logpersistertest.NewTestLogPersister(t))
+
+	assert.Equal(t, sdk.StageStatusFailure, status)
+	assert.Less(t, time.Since(start), 2*time.Second)
+}
+
 func TestCheck_Cancel(t *testing.T) {
 	t.Parallel()
 

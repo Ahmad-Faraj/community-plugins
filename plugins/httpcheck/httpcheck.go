@@ -57,18 +57,18 @@ func (p *plugin) executeCheck(ctx context.Context, in *sdk.ExecuteStageInput[str
 
 func check(ctx context.Context, client *http.Client, opts HTTPCheckStageOptions, initialStart time.Time, slp sdk.StageLogPersister) sdk.StageStatus {
 	// Count the budget from the first run so that a piped restart does not
-	// reset the clock. When it has already passed, the timer fires
-	// immediately, but the probe below still lets a healthy endpoint pass.
-	remaining := opts.Timeout.Duration() - time.Since(initialStart)
-
-	timeout := time.NewTimer(remaining)
-	defer timeout.Stop()
+	// reset the clock. The deadline also cuts off a probe that is still
+	// waiting for a response when the budget ends.
+	checkCtx, cancel := context.WithDeadline(ctx, initialStart.Add(opts.Timeout.Duration()))
+	defer cancel()
 
 	ticker := time.NewTicker(opts.Interval.Duration())
 	defer ticker.Stop()
 
 	slp.Infof("Checking %s for status %d every %v, timeout %v", opts.URL, opts.ExpectedCode, opts.Interval.Duration(), opts.Timeout.Duration())
 
+	// The first probe uses ctx so that a stage restarted after its budget
+	// passed still gets one attempt at a healthy endpoint.
 	if ok := checkOnce(ctx, client, opts, slp); ok {
 		return sdk.StageStatusSuccess
 	}
@@ -76,18 +76,22 @@ func check(ctx context.Context, client *http.Client, opts HTTPCheckStageOptions,
 	for {
 		select {
 		case <-ticker.C:
-			if ok := checkOnce(ctx, client, opts, slp); ok {
+			if checkCtx.Err() != nil {
+				// The budget ended while the previous probe was running.
+				continue
+			}
+			if ok := checkOnce(checkCtx, client, opts, slp); ok {
 				return sdk.StageStatusSuccess
 			}
 
-		case <-timeout.C:
+		case <-checkCtx.Done():
+			if ctx.Err() != nil {
+				slp.Info("HTTP check cancelled")
+				// We can return any status here because the piped handles this case as cancelled by a user,
+				// ignoring the result from a plugin.
+				return sdk.StageStatusFailure
+			}
 			slp.Errorf("%s did not return status %d within %v", opts.URL, opts.ExpectedCode, opts.Timeout.Duration())
-			return sdk.StageStatusFailure
-
-		case <-ctx.Done():
-			slp.Info("HTTP check cancelled")
-			// We can return any status here because the piped handles this case as cancelled by a user,
-			// ignoring the result from a plugin.
 			return sdk.StageStatusFailure
 		}
 	}
