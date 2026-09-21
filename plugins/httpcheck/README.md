@@ -19,9 +19,8 @@ timeout passes. It is meant as a gate between two other stages, for example to
 confirm a new version actually responds before promoting it. Without it the usual
 way to wait for a service to come up is a `WAIT` stage with a guessed duration.
 
-It uses only the plugin SDK and the Go standard library. There is no deploy
-target and no plugin scope configuration, so it can be added to a pipeline of any
-application kind.
+There is no deploy target and no plugin scope configuration, so it can be added
+to a pipeline of any application kind.
 
 ## Stages
 
