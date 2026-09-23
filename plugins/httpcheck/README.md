@@ -88,4 +88,4 @@ spec:
 | url | string | The endpoint to check. Must be an http or https URL with a host. | Yes | |
 | expectedCode | int | The HTTP status code treated as healthy. Must be between 100 and 599. | No | 200 |
 | timeout | duration | How long to keep checking before failing the stage. | No | 1m |
-| interval | duration | How long to wait between checks. | No | 5s |
+| interval | duration | How long to wait between checks. Must be less than `timeout`. | No | 5s |

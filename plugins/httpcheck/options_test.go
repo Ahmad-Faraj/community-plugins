@@ -73,6 +73,11 @@ func TestDecode(t *testing.T) {
 			config:  `{"url": "http://example.com", "expectedCode": 42}`,
 			wantErr: true,
 		},
+		{
+			name:    "interval not less than timeout",
+			config:  `{"url": "http://example.com", "timeout": "5s", "interval": "5s"}`,
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {

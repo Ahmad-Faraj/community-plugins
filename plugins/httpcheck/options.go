@@ -58,6 +58,9 @@ func (o HTTPCheckStageOptions) validate() error {
 	if o.Interval <= 0 {
 		return fmt.Errorf("interval must be greater than 0")
 	}
+	if o.Interval >= o.Timeout {
+		return fmt.Errorf("interval must be less than timeout")
+	}
 	return nil
 }
 
